@@ -190,8 +190,8 @@ impl VMContinuationStack {
     ///
     /// Concretely, switching to the stack prepared by this function
     /// causes that we enter `wasmtime_continuation_start`, which then in turn
-    /// calls `fiber_start` with  the following arguments:
-    /// TOS, func_ref, caller_vmctx, args_ptr, args_capacity
+    /// calls `fiber_start` with the following arguments:
+    /// TOS, func_ref, interpreter, caller_vmctx, args, return_value_count
     ///
     /// Note that at this point we also allocate the args buffer
     /// (see picture at the top of this file).
@@ -226,6 +226,7 @@ impl VMContinuationStack {
     pub fn initialize(
         &self,
         func_ref: *const VMFuncRef,
+        interpreter: *mut u8,
         caller_vmctx: *mut VMContext,
         args: *mut VMHostArray<ValRaw>,
         parameter_count: u32,
@@ -260,14 +261,15 @@ impl VMContinuationStack {
                 // Data near top of stack:
                 (0x08, wasmtime_continuation_start_address().addr()),
                 (0x10, tos.sub(0x10).addr()),
-                (0x18, tos.sub(0x40 + args_data_size).addr()),
+                (0x18, tos.sub(0x48 + args_data_size).addr()),
                 (0x20, usize::try_from(args_capacity).unwrap()),
-                // Data after the args buffer:
+                // Data after the args buffer, popped as fiber_start arguments:
                 (0x28 + args_data_size, func_ref.addr()),
-                (0x30 + args_data_size, caller_vmctx.addr()),
-                (0x38 + args_data_size, args.addr()),
+                (0x30 + args_data_size, interpreter.addr()),
+                (0x38 + args_data_size, caller_vmctx.addr()),
+                (0x40 + args_data_size, args.addr()),
                 (
-                    0x40 + args_data_size,
+                    0x48 + args_data_size,
                     usize::try_from(return_value_count).unwrap(),
                 ),
             ];
@@ -297,6 +299,7 @@ impl Drop for VMContinuationStack {
 /// continuation. It is only ever called from `wasmtime_continuation_start`.
 unsafe extern "C" fn fiber_start(
     func_ref: *mut VMFuncRef,
+    interpreter: *mut u8,
     caller_vmctx: *mut VMContext,
     args: *mut VMHostArray<ValRaw>,
     return_value_count: u32,
@@ -312,6 +315,12 @@ unsafe extern "C" fn fiber_start(
                 .into()
         };
 
+        let pulley = if interpreter.is_null() {
+            None
+        } else {
+            Some(crate::runtime::vm::InterpreterRef::from_raw(interpreter))
+        };
+
         // NOTE(frank-emrich) The usage of the `caller_vmctx` is probably not
         // 100% correct here. Currently, we determine the "caller" vmctx when
         // initializing the fiber stack/continuation (i.e. as part of
@@ -325,7 +334,7 @@ unsafe extern "C" fn fiber_start(
         //
         // TODO(dhil): we are ignoring the boolean return value
         // here... we probably shouldn't.
-        VMFuncRef::array_call(func_ref, None, caller_vmxtx, params_and_returns);
+        VMFuncRef::array_call(func_ref, pulley, caller_vmxtx, params_and_returns);
 
         // The array call trampoline should have just written
         // `return_value_count` values to the `args` buffer. Let's reflect that

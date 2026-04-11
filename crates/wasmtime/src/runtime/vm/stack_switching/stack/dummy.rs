@@ -58,6 +58,7 @@ impl VMContinuationStack {
     pub fn initialize(
         &self,
         _func_ref: *const VMFuncRef,
+        _interpreter: *mut u8,
         _caller_vmctx: *mut VMContext,
         _args: *mut VMHostArray<ValRaw>,
         _parameter_count: u32,

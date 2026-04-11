@@ -128,6 +128,28 @@ unsafe impl Unwind for UnwindPulley {
 }
 
 impl InterpreterRef<'_> {
+    /// Returns the raw pointer to the underlying interpreter state.
+    pub fn as_raw(&self) -> *mut u8 {
+        self.vm.as_ptr().cast()
+    }
+
+    /// Reconstructs an `InterpreterRef` from a raw pointer previously obtained
+    /// via [`InterpreterRef::as_raw`].
+    ///
+    /// # Safety
+    ///
+    /// The pointer must be non-null and must have been obtained from a valid
+    /// `InterpreterRef`. The caller must ensure that the usual aliasing
+    /// guarantees of `InterpreterRef` are upheld.
+    pub unsafe fn from_raw<'a>(ptr: *mut u8) -> InterpreterRef<'a> {
+        unsafe {
+            InterpreterRef {
+                vm: NonNull::new_unchecked(ptr.cast()),
+                _phantom: marker::PhantomData,
+            }
+        }
+    }
+
     fn vm_state(&mut self) -> &mut VmState {
         // SAFETY: This is a bit of a tricky code. The safety here is isolated
         // to this file, but not isolated to just this function call.

@@ -321,8 +321,15 @@ pub fn cont_new(
     // update this object (if needed).
     let contref_args_ptr = &mut contref.args as *mut _ as *mut VMHostArray<crate::ValRaw>;
 
+    let interpreter = match store.store_opaque_mut().executor() {
+        crate::store::ExecutorRef::Interpreter(r) => r.as_raw(),
+        #[cfg(has_host_compiler_backend)]
+        crate::store::ExecutorRef::Native => core::ptr::null_mut(),
+    };
+
     contref.stack.initialize(
         func.cast::<crate::vm::VMFuncRef>(),
+        interpreter,
         caller_vmctx.as_ptr(),
         contref_args_ptr,
         param_count,

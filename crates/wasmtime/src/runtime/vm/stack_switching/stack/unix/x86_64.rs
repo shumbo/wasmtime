@@ -45,17 +45,19 @@ pub(crate) unsafe extern "C" fn wasmtime_continuation_start() {
 
 
         //
-        // Note that the next 4 instructions amount to calling fiber_start
+        // Note that the next 5 instructions amount to calling fiber_start
         // with the following arguments:
         // 1. func_ref
-        // 2. caller_vmctx
-        // 3. args (of type *mut ArrayRef<ValRaw>)
-        // 4. return_value_count
+        // 2. interpreter (raw pointer, null for native)
+        // 3. caller_vmctx
+        // 4. args (of type *mut ArrayRef<ValRaw>)
+        // 5. return_value_count
         //
 
-        pop rcx // return_value_count
-        pop rdx // args
-        pop rsi // caller_vmctx
+        pop r8  // return_value_count
+        pop rcx // args
+        pop rdx // caller_vmctx
+        pop rsi // interpreter
         pop rdi // func_ref
         // Note that RBP already contains the right frame pointer to build a
         // frame pointer chain including the parent continuation:
